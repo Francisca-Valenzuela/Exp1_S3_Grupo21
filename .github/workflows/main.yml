@@ -1,0 +1,102 @@
+name: CI/CD - Build, Push y Deploy con EFS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ──────────────────────────────────────────────────────────────────────
+      # Paso 1: Checkout del repositorio
+      # ──────────────────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # ──────────────────────────────────────────────────────────────────────
+      # Paso 2: Autenticar en DockerHub
+      # ──────────────────────────────────────────────────────────────────────
+      - name: Log in to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # ──────────────────────────────────────────────────────────────────────
+      # Paso 3: Construir la imagen Docker
+      # ──────────────────────────────────────────────────────────────────────
+      - name: Build Docker Image
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ms-administracion-archivos:latest .
+
+      # ──────────────────────────────────────────────────────────────────────
+      # Paso 4: Publicar la imagen en DockerHub
+      # ──────────────────────────────────────────────────────────────────────
+      - name: Push Docker Image to DockerHub
+        run: |
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/ms-administracion-archivos:latest
+
+      # ──────────────────────────────────────────────────────────────────────
+      # Paso 5: Configurar credenciales AWS (sesión temporal Academy)
+      # ──────────────────────────────────────────────────────────────────────
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token:     ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region:            us-east-1
+
+      # ──────────────────────────────────────────────────────────────────────
+      # Paso 5.5: Cargar llave SSH para acceder a EC2
+      # ──────────────────────────────────────────────────────────────────────
+      - name: Add SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      # ──────────────────────────────────────────────────────────────────────
+      # Paso 6: Conectar a EC2 y desplegar el contenedor con EFS montado
+      #
+      # CAMBIO CLAVE respecto a S2:
+      #   Se agrega -v /mnt/efs:/app/efs para montar el EFS en el contenedor.
+      #   El directorio /mnt/efs debe existir en la EC2 y tener el EFS montado.
+      # ──────────────────────────────────────────────────────────────────────
+      - name: SSH - Deploy on EC2 with EFS volume
+        run: |
+          ssh -i ~/.ssh/id_rsa \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              ${{ secrets.USER_SERVER }}@${{ secrets.EC2_HOST }} << 'EOF'
+
+            # Autenticar en DockerHub desde la EC2
+            echo ${{ secrets.DOCKERHUB_TOKEN }} | docker login \
+              -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
+
+            # Descargar la última imagen
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/ms-administracion-archivos:latest
+
+            # Detener y eliminar el contenedor previo si existe
+            docker stop ms-administracion-archivos || true
+            docker rm   ms-administracion-archivos || true
+
+            # Iniciar el contenedor con:
+            #   - volumen EFS montado (-v /mnt/efs:/app/efs)
+            #   - credenciales AWS inyectadas como variables de entorno
+            docker run -d \
+              --name ms-administracion-archivos \
+              -v /mnt/efs:/app/efs \
+              -p 8080:8080 \
+              -e AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}" \
+              -e AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
+              -e AWS_SESSION_TOKEN="${{ secrets.AWS_SESSION_TOKEN }}" \
+              -e AWS_REGION="us-east-1" \
+              --restart unless-stopped \
+              ${{ secrets.DOCKERHUB_USERNAME }}/ms-administracion-archivos:latest
+
+          EOF
