@@ -247,7 +247,7 @@ public class GuiaDespachoController {
      *   ?transportista=NombreTransportista
      *   ?fecha=yyyyMMdd&transportista=NombreTransportista
      */
-    @PreAuthorize("hasRole('GESTION')")
+    @PreAuthorize("hasRole('GESTION') or hasRole('DESCARGA')")
     @GetMapping("/historial")
     public ResponseEntity<?> listarHistorial(
             @RequestParam(required = false) String fecha,
@@ -282,7 +282,7 @@ public class GuiaDespachoController {
      *   ?fecha=2024-03-15
      *   ?transportista=TransportistaX&fecha=2024-03-15
      */
-    @PreAuthorize("hasRole('GESTION')")
+    @PreAuthorize("hasRole('GESTION') or hasRole('DESCARGA')")
     @GetMapping("/consulta")
     public ResponseEntity<?> consultarGuias(
             @RequestParam(required = false) String transportista,
