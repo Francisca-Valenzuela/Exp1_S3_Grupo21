@@ -279,6 +279,7 @@ public class GuiaDespachoController {
      * Consulta guías en la base de datos (H2) por transportista y/o fecha.
      * Permite demostrar los filtros usando datos de BD.
      *   ?transportista=TransportistaX
+     * 
      *   ?fecha=2024-03-15
      *   ?transportista=TransportistaX&fecha=2024-03-15
      */
