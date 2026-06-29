@@ -6,6 +6,7 @@ import com.duoc.ms_administracion_archivos.service.GuiaDespachoService;
 import com.duoc.ms_administracion_archivos.service.S3Service;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.services.s3.model.S3Exception;
@@ -55,6 +56,7 @@ public class GuiaDespachoController {
     // ════════════════════════════════════════════════════════════════════════════
 
     /** Crea una nueva guía de despacho. */
+    @PreAuthorize("hasRole('GESTION')")
     @PostMapping
     public ResponseEntity<?> crearGuia(@RequestBody GuiaDespachoRequest request) {
         try {
@@ -66,12 +68,14 @@ public class GuiaDespachoController {
     }
 
     /** Lista todas las guías de despacho registradas. */
+    @PreAuthorize("hasRole('GESTION')")
     @GetMapping
     public ResponseEntity<List<GuiaDespacho>> listarGuias() {
         return ResponseEntity.ok(guiaService.listarTodas());
     }
 
     /** Obtiene una guía por su ID. */
+    @PreAuthorize("hasRole('GESTION')")
     @GetMapping("/{id}")
     public ResponseEntity<?> obtenerGuia(@PathVariable Long id) {
         try {
@@ -86,6 +90,7 @@ public class GuiaDespachoController {
      * Si el transportista o la fecha cambiaron y el archivo ya existía en S3,
      * lo mueve automáticamente a la nueva key para mantener la organización sincronizada.
      */
+    @PreAuthorize("hasRole('GESTION')")
     @PutMapping("/{id}")
     public ResponseEntity<?> actualizarGuia(@PathVariable Long id,
                                             @RequestBody GuiaDespachoRequest request) {
@@ -113,6 +118,7 @@ public class GuiaDespachoController {
     }
 
     /** Elimina una guía de la base de datos. */
+    @PreAuthorize("hasRole('GESTION')")
     @DeleteMapping("/{id}")
     public ResponseEntity<?> eliminarGuia(@PathVariable Long id) {
         try {
@@ -132,6 +138,7 @@ public class GuiaDespachoController {
      * Key en S3: {yyyyMMdd}/{transportista}/guia{id}.txt
      * Criterios 1 y 2 de la rúbrica.
      */
+    @PreAuthorize("hasRole('GESTION')")
     @PostMapping("/{id}/subir")
     public ResponseEntity<?> subirGuia(@PathVariable Long id) {
         try {
@@ -151,7 +158,9 @@ public class GuiaDespachoController {
     /**
      * Descarga el archivo de la guía desde S3.
      * Criterio 4 de la rúbrica.
+     * Único endpoint accesible con el rol "DESCARGA" (rol exclusivo del caso).
      */
+    @PreAuthorize("hasRole('DESCARGA') or hasRole('GESTION')")
     @GetMapping("/{id}/descargar")
     public ResponseEntity<?> descargarGuia(@PathVariable Long id) {
         try {
@@ -180,6 +189,7 @@ public class GuiaDespachoController {
      * Actualiza/reemplaza el archivo de la guía en S3 con un MultipartFile.
      * Criterio 3 de la rúbrica.
      */
+    @PreAuthorize("hasRole('GESTION')")
     @PutMapping("/{id}/actualizar-archivo")
     public ResponseEntity<?> actualizarArchivoS3(
             @PathVariable Long id,
@@ -209,6 +219,7 @@ public class GuiaDespachoController {
      * Elimina el archivo de la guía de S3.
      * Criterio 3 (eliminación) de la rúbrica.
      */
+    @PreAuthorize("hasRole('GESTION')")
     @DeleteMapping("/{id}/eliminar-archivo")
     public ResponseEntity<?> eliminarArchivoS3(@PathVariable Long id) {
         try {
@@ -236,6 +247,7 @@ public class GuiaDespachoController {
      *   ?transportista=NombreTransportista
      *   ?fecha=yyyyMMdd&transportista=NombreTransportista
      */
+    @PreAuthorize("hasRole('GESTION')")
     @GetMapping("/historial")
     public ResponseEntity<?> listarHistorial(
             @RequestParam(required = false) String fecha,
@@ -270,6 +282,7 @@ public class GuiaDespachoController {
      *   ?fecha=2024-03-15
      *   ?transportista=TransportistaX&fecha=2024-03-15
      */
+    @PreAuthorize("hasRole('GESTION')")
     @GetMapping("/consulta")
     public ResponseEntity<?> consultarGuias(
             @RequestParam(required = false) String transportista,

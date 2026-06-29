@@ -96,6 +96,7 @@ jobs:
               -e AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
               -e AWS_SESSION_TOKEN="${{ secrets.AWS_SESSION_TOKEN }}" \
               -e AWS_REGION="us-east-1" \
+              -e AZURE_ISSUER_URI="${{ secrets.AZURE_ISSUER_URI }}" \
               --restart unless-stopped \
               ${{ secrets.DOCKERHUB_USERNAME }}/ms-administracion-archivos:latest
 
