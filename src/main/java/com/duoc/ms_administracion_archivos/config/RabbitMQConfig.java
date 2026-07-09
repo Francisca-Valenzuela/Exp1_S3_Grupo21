@@ -1,46 +1,38 @@
 package com.duoc.ms_administracion_archivos.config;
 
+import java.util.Map;
+
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
-import org.springframework.amqp.rabbit.connection.ConnectionFactory;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
-import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * Configuración de colas RabbitMQ (Semana 8).
- *
- * Define:
- *  - Cola 1 "guias.queue"        -> flujo normal (guía procesada con éxito)
- *  - Cola 2 "guias.error.queue"  -> flujo de error (si falla el envío/procesamiento)
- *  - Exchange tipo Direct "guias.exchange"
- *  - Un binding por cada cola, cada uno con su propia routing key
- *  - Conversor de mensajes a JSON, para enviar/recibir objetos Java (no solo texto)
- */
 @Configuration
 public class RabbitMQConfig {
 
-    // Nombres de colas
     public static final String QUEUE_GUIAS = "guias.queue";
     public static final String QUEUE_GUIAS_ERROR = "guias.error.queue";
-
-    // Exchange
     public static final String EXCHANGE_GUIAS = "guias.exchange";
+    public static final String DLX_EXCHANGE = "dlx-exchange"; // Exchange para errores
 
-    // Routing keys
-    public static final String ROUTING_KEY_GUIAS = "guias.routingkey";
-    public static final String ROUTING_KEY_GUIAS_ERROR = "guias.error.routingkey";
+    @Bean
+    public DirectExchange guiasExchange() {
+        return new DirectExchange(EXCHANGE_GUIAS);
+    }
 
-    // ── Colas ────────────────────────────────────────────────────────────────
+    @Bean
+    public DirectExchange dlxExchange() {
+        return new DirectExchange(DLX_EXCHANGE);
+    }
 
     @Bean
     public Queue guiasQueue() {
-        // durable = true -> la cola persiste aunque RabbitMQ se reinicie
-        return new Queue(QUEUE_GUIAS, true);
+        // Enlazar la cola principal al DLX[cite: 2]
+        return new Queue(QUEUE_GUIAS, true, false, false, 
+                Map.of("x-dead-letter-exchange", DLX_EXCHANGE,
+                       "x-dead-letter-routing-key", "error.routingkey"));
     }
 
     @Bean
@@ -48,36 +40,13 @@ public class RabbitMQConfig {
         return new Queue(QUEUE_GUIAS_ERROR, true);
     }
 
-    // ── Exchange ─────────────────────────────────────────────────────────────
-
-    @Bean
-    public DirectExchange guiasExchange() {
-        return new DirectExchange(EXCHANGE_GUIAS);
-    }
-
-    // ── Bindings ─────────────────────────────────────────────────────────────
-
     @Bean
     public Binding bindingGuias(Queue guiasQueue, DirectExchange guiasExchange) {
-        return BindingBuilder.bind(guiasQueue).to(guiasExchange).with(ROUTING_KEY_GUIAS);
+        return BindingBuilder.bind(guiasQueue).to(guiasExchange).with("guias.routingkey");
     }
 
     @Bean
-    public Binding bindingGuiasError(Queue guiasErrorQueue, DirectExchange guiasExchange) {
-        return BindingBuilder.bind(guiasErrorQueue).to(guiasExchange).with(ROUTING_KEY_GUIAS_ERROR);
-    }
-
-    // ── Conversor JSON ───────────────────────────────────────────────────────
-
-    @Bean
-    public MessageConverter jsonMessageConverter() {
-        return new Jackson2JsonMessageConverter();
-    }
-
-    @Bean
-    public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory) {
-        RabbitTemplate template = new RabbitTemplate(connectionFactory);
-        template.setMessageConverter(jsonMessageConverter());
-        return template;
+    public Binding bindingGuiasError(Queue guiasErrorQueue, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(guiasErrorQueue).to(dlxExchange).with("error.routingkey");
     }
 }
