@@ -52,8 +52,9 @@ public class ProductorService {
 
     private void enviarAColaError(GuiaDespacho guia, String motivoError) {
         try {
+            // Apuntamos al nuevo DLX_EXCHANGE en lugar de EXCHANGE_GUIAS
             rabbitTemplate.convertAndSend(
-                    RabbitMQConfig.EXCHANGE_GUIAS,
+                    RabbitMQConfig.DLX_EXCHANGE,
                     RabbitMQConfig.ROUTING_KEY_GUIAS_ERROR,
                     guia
             );
