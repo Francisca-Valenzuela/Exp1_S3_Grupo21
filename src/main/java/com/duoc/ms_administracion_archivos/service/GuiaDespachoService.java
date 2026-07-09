@@ -1,32 +1,29 @@
 package com.duoc.ms_administracion_archivos.service;
 
-import com.duoc.ms_administracion_archivos.dto.GuiaDespachoRequest;
-import com.duoc.ms_administracion_archivos.model.GuiaDespacho;
-import com.duoc.ms_administracion_archivos.repository.GuiaDespachoRepository;
-import org.springframework.context.annotation.Lazy;
-import org.springframework.stereotype.Service;
-
 import java.time.LocalDate;
 import java.util.List;
 
-/**
- * Servicio de negocio para gestión de guías de despacho (CRUD en H2).
- *
- * Al actualizar una guía, si el transportista o la fecha cambian y el archivo
- * ya fue subido a S3, se mueve automáticamente a la nueva key para mantener
- * la organización {fecha}/{transportista}/guia{id}.txt sincronizada.
- */
+import org.springframework.context.annotation.Lazy;
+import org.springframework.stereotype.Service;
+
+import com.duoc.ms_administracion_archivos.dto.GuiaDespachoRequest;
+import com.duoc.ms_administracion_archivos.model.GuiaDespacho;
+import com.duoc.ms_administracion_archivos.repository.GuiaDespachoRepository;
+
 @Service
 public class GuiaDespachoService {
 
     private final GuiaDespachoRepository repository;
     private final S3Service s3Service;
+    private final ProductorService productorService;
 
     // @Lazy rompe la dependencia circular GuiaDespachoService ↔ S3Service
     public GuiaDespachoService(GuiaDespachoRepository repository,
-                                @Lazy S3Service s3Service) {
-        this.repository = repository;
-        this.s3Service  = s3Service;
+                                @Lazy S3Service s3Service,
+                                ProductorService productorService) {
+        this.repository       = repository;
+        this.s3Service        = s3Service;
+        this.productorService = productorService;
     }
 
     public List<GuiaDespacho> listarTodas() {
@@ -50,7 +47,13 @@ public class GuiaDespachoService {
             req.getFechaDespacho() != null ? req.getFechaDespacho() : LocalDate.now(),
             req.getEstado() != null ? req.getEstado() : "PENDIENTE"
         );
-        return repository.save(guia);
+
+        GuiaDespacho guardada = repository.save(guia);
+
+        // Semana 8: publicar la guía en RabbitMQ para su procesamiento asíncrono
+        productorService.enviarGuia(guardada);
+
+        return guardada;
     }
 
     /**
